@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session as Db
 from ..config import settings
 from ..db import get_db
 from ..errors import ApiError
-from ..services.alerts import process_due_alerts, remind_priority_pros
+from ..services.alerts import process_due_alerts, remind_dossiers, remind_priority_pros
 from ..services.pay.manual import expire_provisional
 from ..services.pay.renewal import send_reminders
 from ..services.wa import store as wa_store
@@ -26,6 +26,7 @@ def cron_alerts(request: Request, db: Db = Depends(get_db)):
     if forced:  # rappels de fin de formule : seulement sur appel autorisé
         out["reminders"] = send_reminders(db)
         out["priority_reminders"] = remind_priority_pros(db)
+        out["dossier_reminders"] = remind_dossiers(db)
     return out
 
 

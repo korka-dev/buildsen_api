@@ -115,8 +115,8 @@ class Settings(BaseSettings):
             out.append("ALLOWED_ORIGINS doit contenir uniquement des adresses https:// du site.")
         if not self.app_url.startswith("https://"):
             out.append("APP_URL doit être l'adresse https:// du site.")
-        if not self.resend_api_key:
-            out.append("RESEND_API_KEY manquant : aucun e-mail (alertes, rappels, réinitialisation de mot de passe) ne partirait.")
+        if not self.resend_api_key or not self.resend_api_key.startswith("re_") or "REMPLACER" in self.resend_api_key.upper():
+            out.append("RESEND_API_KEY manquant ou factice : aucun e-mail (alertes, rappels, réinitialisation de mot de passe) ne partirait.")
         if self.plans_enabled and not self.pay_on:
             out.append("PLANS_ENABLED=true mais aucun moyen de paiement actif : renseigner PAYMENT_PROVIDER=links et WAVE_PAY_LINK / OM_PAY_LINK.")
         if self.wave_grace_hours > 0:

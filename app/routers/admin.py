@@ -13,7 +13,8 @@ from ..db import get_db
 from ..deps import require_admin
 from ..emails import more_info_mail, refused_mail, request_removed_mail, verified_mail
 from ..errors import ApiError, not_found
-from ..mailer import app_url, mail_ctx, send_email, send_mail
+from ..mailer import LAST as MAIL_LAST
+from ..mailer import app_url, key_problem, mail_ctx, send_email, send_email_detail, send_mail
 from ..models import Ad, AuditLog, Conversation, Credential, Payment, ProProfile, Report, Review, ServiceRequest, Session, User
 from ..rules import ADMIN_ROLES, CLIENTS_OPEN, DOC_TYPES, LAUNCH_OFFER, PLANS, STATUTS, can_decide
 from ..security import (
@@ -116,6 +117,19 @@ def admin_me(admin: User = Depends(require_admin()), db: Db = Depends(get_db)):
     reports = db.scalar(select(func.count()).select_from(Report).where(Report.state == "OPEN"))
     return {"admin": user_out(admin), "roleLabel": ADMIN_ROLES[admin.admin_role],
             "counts": {"dossiers": len(_pending_dossiers(db)), "requests": to_review, "reports": reports}, "clientsOpen": CLIENTS_OPEN}
+
+
+@router.get("/mail")
+def mail_status(admin: User = Depends(require_admin("SUPPORT"))):
+    """État de l'envoi d'e-mails : clé configurée ? dernier envoi réussi ?"""
+    return {"configured": key_problem() is None, "problem": key_problem(), "from": settings.email_from, "last": MAIL_LAST}
+
+
+@router.post("/mail/test")
+def mail_test(admin: User = Depends(require_admin("SUPPORT"))):
+    """Envoie un e-mail de test à l'administrateur connecté et dit pourquoi il n'est pas parti, le cas échéant."""
+    ok, error = send_email_detail(admin.email, "Test d'envoi BUILDSEN", "Si vous lisez ce message, l'envoi d'e-mails de BUILDSEN fonctionne.")
+    return {"ok": ok, "to": admin.email, "error": error or key_problem() if not ok else None}
 
 
 @router.get("/overview")

@@ -296,3 +296,33 @@ def plan_expiring_mail(ctx: Ctx, first_name: str, plan: str, until: str, link: s
                "Sans renouvellement, vous repassez en formule Gratuite : 3 contacts par mois et nouvelles demandes signalées avec 48 h de retard."],
         button=("Renouveler mon abonnement", link),
     ))
+
+
+def request_published_mail(ctx: Ctx, first_name: str, title: str, ref: str, link: str, max_pros: int) -> Mail:
+    return _mail("Votre demande est publiée sur BUILDSEN", layout(
+        ctx, title=f"Votre demande est en ligne, {esc(first_name)}",
+        paras=[
+            f"Votre demande <b>« {esc(title)} »</b> (référence {esc(ref)}) est publiée. Les professionnels vérifiés de votre zone viennent d'être prévenus.",
+            f"Jusqu'à {max_pros} professionnels peuvent vous écrire. Vous recevrez un e-mail à chaque nouveau message, et vous pourrez comparer leurs profils avant de choisir.",
+        ],
+        button=("Suivre ma demande", link),
+    ))
+
+
+def review_received_mail(ctx: Ctx, first_name: str, rating: int, link: str) -> Mail:
+    return _mail("Un client vous a laissé un avis", layout(
+        ctx, title=f"Nouvel avis : {rating} étoile{'s' if rating > 1 else ''} sur 5",
+        paras=[f"Bonjour {esc(first_name)}, un client vient de noter votre travail sur BUILDSEN ({rating}/5). Votre note moyenne est affichée sur votre profil public."],
+        button=("Voir la conversation", link),
+    ))
+
+
+def plan_declined_mail(ctx: Ctx, first_name: str, plan: str, link: str) -> Mail:
+    return _mail("Votre paiement n'a pas pu être confirmé", layout(
+        ctx, title="Nous n'avons pas pu confirmer votre paiement",
+        paras=[
+            f"Bonjour {esc(first_name)}, nous n'avons pas retrouvé votre paiement pour la formule <b>{esc(plan)}</b>. Votre formule n'a donc pas été activée.",
+            "Si vous avez bien payé, répondez à cet e-mail ou écrivez-nous sur WhatsApp avec le numéro utilisé et l'identifiant de la transaction : nous le vérifions tout de suite. Sinon, vous pouvez relancer un paiement.",
+        ],
+        button=("Réessayer mon abonnement", link),
+    ))

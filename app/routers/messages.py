@@ -9,7 +9,8 @@ from ..audit import audit
 from ..db import get_db
 from ..deps import require_client, require_member, require_pro
 from ..errors import ApiError, not_found
-from ..mailer import app_url, notify_team
+from ..emails import review_received_mail
+from ..mailer import app_url, mail_ctx, notify_team, send_mail
 from ..models import Conversation, ProProfile, Report, ServiceRequest, User
 from ..serializers import conversation_full
 from ..services import reviews
@@ -68,10 +69,11 @@ def send_message(conversation_id: str, background: BackgroundTasks, body: dict =
 
 
 @router.post("/conversations/{conversation_id}/review")
-def review_conversation(conversation_id: str, body: dict = Body(...), user: User = Depends(require_client), db: Db = Depends(get_db)):
+def review_conversation(conversation_id: str, background: BackgroundTasks, body: dict = Body(...), user: User = Depends(require_client), db: Db = Depends(get_db)):
     """Avis du particulier sur le professionnel (une fois, après sa réponse)."""
     c, _ = _mine(db, conversation_id, user)
     r = reviews.create_review(db, user, c, body.get("rating"), text(body, "comment"))
+    background.add_task(send_mail, c.pro.email, review_received_mail(mail_ctx(), c.pro.first_name, r.rating, app_url(f"/pro/messages/{c.id}")))
     return {"ok": True, "review": {"rating": r.rating, "comment": r.comment}}
 
 

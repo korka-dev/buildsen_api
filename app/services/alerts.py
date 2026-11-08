@@ -10,10 +10,10 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session as Db
 from sqlalchemy.orm import joinedload
 
-from ..emails import new_request_pro_mail, request_reminder_mail
-from ..mailer import mail_ctx, send_mail_batch
+from ..emails import dossier_reminder_mail, new_request_pro_mail, request_reminder_mail
+from ..mailer import mail_ctx, send_mail, send_mail_batch
 from ..models import ProProfile, ServiceRequest, Throttle, User
-from ..rules import FREE_ALERT_DELAY_H, MAX_PROS_PER_REQUEST, PLANS_ACTIVE, REMIND_AFTER_H, active_plan, pro_sees
+from ..rules import FREE_ALERT_DELAY_H, MAX_PROS_PER_REQUEST, PLANS_ACTIVE, REMIND_AFTER_H, active_plan, missing_items, pro_sees
 from ..utils import now
 from .market import request_title
 from .queries import conversation_counts
@@ -123,3 +123,25 @@ def my_conversations_for_request(db: Db, request_id: str):
     from ..models import Conversation
 
     return db.scalars(select(Conversation).where(Conversation.request_id == request_id)).all()
+
+
+def remind_dossiers(db: Db, limit: int = 100) -> int:
+    """Professionnels inscrits dont le dossier n'est pas soumis : un rappel après 1 jour, un second après 4 jours."""
+    sent = 0
+    t = now()
+    rows = db.scalars(
+        select(ProProfile).join(User).where(ProProfile.state == "DRAFT", User.status == "ACTIVE", User.created_at < t - timedelta(days=1))
+        .options(joinedload(ProProfile.user), joinedload(ProProfile.credentials))
+    ).unique().all()
+    for p in rows:
+        stage = "2" if p.user.created_at < t - timedelta(days=4) else "1"
+        key = f"dossier:{p.user_id}:{stage}"
+        if db.get(Throttle, key) or p.user.created_at < t - timedelta(days=30):
+            continue
+        db.add(Throttle(key=key, count=1, reset_at=t + timedelta(days=60)))
+        db.commit()
+        send_mail(p.user.email, dossier_reminder_mail(mail_ctx(), p.user.first_name, missing_items(p), info_done=bool(p.statut)))
+        sent += 1
+        if sent >= limit:
+            break
+    return sent

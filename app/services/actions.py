@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session as Db
 from sqlalchemy.orm import joinedload
 
 from ..audit import audit
-from ..emails import shared_mail
+from ..emails import request_published_mail, shared_mail
 from ..errors import ApiError
 from ..mailer import app_url, mail_ctx, notify_team, send_mail
 from ..models import Conversation, Message, ProProfile, ServiceRequest, User
@@ -66,6 +66,7 @@ def after_publish(db: Db, request_id: str) -> None:
     r = db.get(ServiceRequest, request_id)
     alert_pros(db, r, "paid")
     c = r.client
+    send_mail(c.email, request_published_mail(mail_ctx(), c.first_name, request_title(r), r.ref, app_url(f"/espace/demandes/{r.ref}"), MAX_PROS_PER_REQUEST))
     notify_team(db, f"Nouvelle demande publiée : {r.ref}",
                 f"{request_title(r)}\n{r.commune} · budget {fcfa(r.budget)}\nDéposée par {c.first_name} {c.last_name[:1]}.\n\n{app_url('/admin/demandes')}",
                 ("MODER",))

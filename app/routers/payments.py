@@ -115,6 +115,12 @@ def _notify_paid(db: Db, pay_id: str) -> None:
         notify.paid(db, pay)
 
 
+def _notify_declined(db: Db, pay_id: str) -> None:
+    pay = db.get(Payment, pay_id)
+    if pay:
+        notify.declined(db, pay)
+
+
 @router.post("/payments/webhook/paydunya")
 async def webhook_paydunya(request: Request, background: BackgroundTasks):
     """Notification de PayDunya : on n'en retient que la référence, puis on interroge PayDunya pour connaître le vrai état."""
@@ -143,6 +149,8 @@ def sim_pay(token: str, result: str, background: BackgroundTasks, db: Db = Depen
         pay, done = service.settle(db, token)
         if done:
             background.add_task(with_db, _notify_paid, pay.id)
+    elif pay.state == "FAILED":
+        background.add_task(with_db, _notify_declined, pay.id)
     return {"state": pay.state}
 
 

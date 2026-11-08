@@ -4,7 +4,7 @@ import logging
 
 from sqlalchemy.orm import Session as Db
 
-from ...emails import plan_paid_mail
+from ...emails import plan_declined_mail, plan_paid_mail
 from ...mailer import app_url, mail_ctx, send_mail
 from ...models import Payment, User
 from ...rules import PLAN_CONTACTS, PLANS
@@ -14,6 +14,15 @@ from ..wa.i18n import tr
 from ..wa.sender import send_text
 
 log = logging.getLogger("buildsen.pay")
+
+
+def declined(db: Db, pay: Payment) -> None:
+    """Paiement refusé par l'équipe : le professionnel est prévenu par e-mail. Ne lève jamais d'erreur."""
+    try:
+        user = db.get(User, pay.user_id)
+        send_mail(user.email, plan_declined_mail(mail_ctx(), user.first_name, PLANS[pay.plan]["name"], app_url("/pro/abonnement")))
+    except Exception:  # noqa: BLE001
+        log.exception("Paiement : refus non signalé")
 
 
 def paid(db: Db, pay: Payment) -> None:
