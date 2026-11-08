@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session as Db
 from sqlalchemy.orm import joinedload, selectinload
 
 from ..audit import audit
+from ..config import settings
 from ..db import get_db
 from ..deps import require_admin
 from ..emails import more_info_mail, refused_mail, request_removed_mail, verified_mail
@@ -57,8 +58,8 @@ def admin_login(request: Request, response: Response, body: dict = Body(...), db
     if too_many(db, key, 5, 15) or too_many(db, f"admin-ip:{client_ip(request)}", 20, 15):
         raise ApiError("Trop de tentatives. Réessayez dans 15 minutes.", 429)
     u = db.scalar(select(User).where(User.email == mail))
-    ok = (u and u.role == "ADMIN" and u.status == "ACTIVE" and u.totp_enabled
-          and check_password(pw, u.password_hash) and check_totp(u.totp_secret, code))
+    second_factor = (not settings.admin_2fa) or (u is not None and u.totp_enabled and check_totp(u.totp_secret, code))
+    ok = (u and u.role == "ADMIN" and u.status == "ACTIVE" and u.password_hash and check_password(pw, u.password_hash) and second_factor)
     if not ok:
         raise ApiError("Identifiants ou code de double authentification incorrects.", 401)
     clear_throttle(db, key)
@@ -95,9 +96,9 @@ def activate(response: Response, body: dict = Body(...), db: Db = Depends(get_db
         raise ApiError(problem)
     if pw != str(body.get("password2") or ""):
         raise ApiError("Les deux mots de passe ne correspondent pas.")
-    if not check_totp(u.totp_secret, re.sub(r"\s", "", text(body, "code"))):
+    if settings.admin_2fa and not check_totp(u.totp_secret, re.sub(r"\s", "", text(body, "code"))):
         raise ApiError("Code incorrect. Vérifiez l'heure de votre téléphone et saisissez le code affiché par l'application.")
-    u.password_hash, u.totp_enabled = hash_password(pw), True
+    u.password_hash, u.totp_enabled = hash_password(pw), settings.admin_2fa
     clear_token(u)
     audit(db, u.id, "Compte administrateur activé", u.email)
     create_session(db, response, u.id, admin=True)
@@ -283,7 +284,7 @@ def delete_user(user_id: str, body: dict = Body(...), admin: User = Depends(requ
 @router.get("/team")
 def team(admin: User = Depends(require_admin("SUPER")), db: Db = Depends(get_db)):
     admins = db.scalars(select(User).where(User.role == "ADMIN").order_by(User.created_at.asc())).all()
-    return {"admins": [{**user_out(u), "roleLabel": ADMIN_ROLES.get(u.admin_role or "VERIF"), "active": u.totp_enabled} for u in admins]}
+    return {"admins": [{**user_out(u), "roleLabel": ADMIN_ROLES.get(u.admin_role or "VERIF"), "active": bool(u.totp_enabled or (not settings.admin_2fa and u.password_hash))} for u in admins]}
 
 
 @router.post("/team/invite")

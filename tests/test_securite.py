@@ -476,3 +476,19 @@ def test_garde_fous_de_production(monkeypatch):
     monkeypatch.setattr(settings, "payment_provider", "sim")  # le paiement simulé est interdit en production : aucun moyen actif
     problems = " ".join(settings.production_problems())
     assert "RESEND_API_KEY" in problems and "WAVE_GRACE_HOURS" in problems and "aucun moyen de paiement" in problems
+
+
+def test_admin_sans_double_authentification(db, monkeypatch):
+    from app.models import User
+    from app.security import hash_password
+
+    u = User(email="sans2fa@test.sn", first_name="A", last_name="B", role="ADMIN", admin_role="SUPER", status="ACTIVE",
+             password_hash=hash_password("Un-mot-de-passe-long-1"), totp_enabled=False, totp_secret="X" * 32)
+    db.add(u)
+    db.commit()
+    c = TestClient(app, headers={"Origin": settings.origins[0]})
+    body = {"email": "sans2fa@test.sn", "password": "Un-mot-de-passe-long-1"}
+    assert c.post("/api/admin/login", json=body).status_code == 401  # double authentification active (par défaut) : un compte non enrôlé ne passe pas
+    monkeypatch.setattr(settings, "admin_2fa", False)
+    assert c.post("/api/admin/login", json={**body, "password": "mauvais-mot-de-passe-1"}).status_code == 401  # le mot de passe reste exigé
+    assert c.post("/api/admin/login", json=body).status_code == 200

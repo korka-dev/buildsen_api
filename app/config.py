@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     # de l'administrateur de test créé par `python -m app.devseed`. Ignorés en production et sur toute base qui n'est pas locale.
     admin_dev_code: str = ""
     admin_dev_password: str = ""
+    # Double authentification de l'administration (code à 6 chiffres). false = e-mail + mot de passe seulement : réduit nettement la protection.
+    admin_2fa: bool = True
 
     # Derrière un proxy (frontend Next.js, Render, Fly…) : l'adresse IP du visiteur est lue dans X-Forwarded-For
     trust_proxy: bool = True
